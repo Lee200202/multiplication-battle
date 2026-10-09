@@ -6,7 +6,6 @@
 """
 import html
 import json
-import os
 import re
 import threading
 import time
@@ -22,9 +21,24 @@ except ImportError:
 HERE = Path(__file__).parent
 PAGE = HERE / "index.html"
 
-# 全站英雄榜的存檔。Space 有掛載儲存桶（/data）就存在那裡，重啟也不會消失；
-# 沒掛的話存在程式旁邊，Space 重啟或重新建置時會清空。
-SCORES = (Path("/data") if os.access("/data", os.W_OK) else HERE) / "heroes.json"
+
+
+def pick_store():
+    """全站英雄榜的存檔位置。Space 有掛載儲存桶（/data）而且真的寫得進去就存在那裡，重啟也不會消失；
+    否則存在程式旁邊，Space 重啟或重新建置時會清空。"""
+    for folder in (Path("/data"), HERE):
+        try:
+            probe = folder / ".write-test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink()
+            return folder / "heroes.json"
+        except OSError:
+            continue
+    return HERE / "heroes.json"
+
+
+SCORES = pick_store()
+print(f"英雄榜存檔位置：{SCORES}", flush=True)
 KEEP = 50  # 每種秒數最多保留幾筆
 LOCK = threading.Lock()
 

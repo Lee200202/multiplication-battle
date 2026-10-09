@@ -231,7 +231,7 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
         <h3>乘法範圍（要練幾的乘法）<button id="allTables">全選</button></h3>
         <div class="seg tables" id="tables"></div>
       </div>
-      <div class="opt" data-show="solo cpu">
+      <div class="opt" data-show="solo duo cpu">
         <h3>作答方式</h3>
         <div class="seg">
           <button data-k="input" data-v="choice">四選一</button>
@@ -253,7 +253,7 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
           <button data-k="seat" data-v="side">並排（左右）</button>
         </div>
         <div class="names"><input id="n1" type="text" maxlength="8" placeholder="玩家 1"><input id="n2" type="text" maxlength="8" placeholder="玩家 2"></div>
-        <p class="hint">手機、平板放桌上面對面玩最剛好。用電腦鍵盤時：玩家 1 按 Q W A S，玩家 2 按 I O K L。</p>
+        <p class="hint" id="duoHint"></p>
       </div>
       <div class="opt" data-show="duo">
         <h3>兩人的題目</h3>
@@ -348,6 +348,8 @@ function syncHome() {
     b.classList.toggle('on', on);
   });
   $$('[data-show]').forEach(el => el.classList.toggle('hide', !el.dataset.show.split(' ').includes(cfg.mode)));
+  $('#duoHint').textContent = '手機、平板放桌上面對面玩最剛好。用電腦鍵盤時：' + (cfg.input === 'pad'
+    ? '玩家 1 用上排數字鍵（Backspace 刪除），玩家 2 用右側數字鍵盤（按 . 或 - 刪除）。' : '玩家 1 按 Q W A S，玩家 2 按 I O K L。');
   $('#qsetHint').textContent = cfg.qset === 'diff'
     ? '兩人各出各的題目，偷看對方的答案也沒用。' : '兩人照同樣的順序出題，最公平；但落後的人看得到對方剛答過的題目。';
   $('#customRow').classList.toggle('show', cfg.custom);
@@ -448,7 +450,7 @@ function startGame() {
   for (let i = 0; i < (two ? 2 : 1); i++) {
     const root = $(i ? '#game .p2' : '#game .p1');
     const cpu = cfg.mode === 'cpu' && i === 1;
-    const input = (cfg.mode === 'duo' || cpu) ? 'choice' : cfg.input;
+    const input = cpu ? 'choice' : cfg.input;
     const hints = cpu ? null : cfg.mode === 'duo' ? HINTS[i ? 'p2' : 'p1'] : HINTS.solo;
     root.className = `panel ${i ? 'p2' : 'p1'}${cpu ? ' cpu' : ''}`;
     root.innerHTML = `<div class="p-inner">
@@ -702,7 +704,13 @@ document.addEventListener('keydown', e => {
   if (!$('#game').classList.contains('active') || !G) return;
   const [a, b] = G.players, hit = (pl, k) => { e.preventDefault(); if (!pl.locked) answer(pl, +pl.el.btns[k].dataset.v); };
   if (cfg.mode === 'duo') {
-    if (e.code in KEYS.p1) hit(a, KEYS.p1[e.code]); else if (e.code in KEYS.p2) hit(b, KEYS.p2[e.code]);
+    let m;
+    if (a.input !== 'pad') { if (e.code in KEYS.p1) hit(a, KEYS.p1[e.code]); else if (e.code in KEYS.p2) hit(b, KEYS.p2[e.code]); }
+    // 數字鍵盤對戰：玩家 1 用上排數字鍵，玩家 2 用右側數字鍵盤
+    else if ((m = /^Digit(\d)$/.exec(e.code))) padKey(a, m[1]);
+    else if (e.code === 'Backspace') { e.preventDefault(); padKey(a, '⌫'); }
+    else if ((m = /^Numpad(\d)$/.exec(e.code))) padKey(b, m[1]);
+    else if (e.code === 'NumpadDecimal' || e.code === 'NumpadSubtract') padKey(b, '⌫');
   } else if (a.input === 'pad') {
     const m = /^(?:Digit|Numpad)(\d)$/.exec(e.code);
     if (m) padKey(a, m[1]); else if (e.code === 'Backspace') { e.preventDefault(); padKey(a, '⌫'); }

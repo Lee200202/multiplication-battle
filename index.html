@@ -183,8 +183,8 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
 .r-actions .ghost-btn{border-radius:18px}
 
 /* ---------- 乘法表 ---------- */
-#table{position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(30,36,64,.55);padding:12px}
-#table.show{display:grid}
+.modal{position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(30,36,64,.55);padding:12px}
+.modal.show{display:grid}
 .t-card{background:#fff;border-radius:22px;padding:16px;width:100%;max-width:520px}
 .t-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .t-head b{font-family:var(--num);font-size:22px;color:var(--primary)}
@@ -193,6 +193,29 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
 .t-grid .h{background:var(--primary);color:#fff}
 .t-grid .hl{background:#e0e3ff}
 .t-grid .sel{background:#f59e0b;color:#fff}
+
+/* ---------- 英雄榜 ---------- */
+.hero-box{background:#f6f7fc;border-radius:16px;padding:12px 14px 6px;margin-bottom:12px;text-align:left}
+.hero-box h4{margin:0 0 8px;font-size:14px;color:var(--primary);display:flex;justify-content:space-between;align-items:center}
+.hero-box h4 button{border:0;background:none;color:var(--primary);font-weight:600;font-size:13px;padding:2px 0}
+.hero-row{display:flex;gap:8px;margin-bottom:8px}
+.hero-row input{flex:1;min-width:0}
+.hero-row .ghost-btn{flex:none;border-color:var(--primary);color:var(--primary)}
+.hero-msg{margin:0 0 8px;font-weight:600;font-size:14px;line-height:1.5}
+.h-tabs{margin-bottom:8px}
+.h-tabs button{flex:0 0 auto;min-width:68px;padding:8px 6px}
+.h-list{list-style:none;margin:0;padding:0;max-height:min(56dvh,460px);overflow:auto}
+.h-list li{display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid var(--line)}
+.h-list .rk{flex:none;width:30px;text-align:center;font-family:var(--num);font-weight:700;font-size:18px;color:var(--muted)}
+.h-list .nm{flex:1;min-width:0}
+.h-list .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.h-list .nm small{color:var(--muted);font-size:11px}
+.h-list .sc{flex:none;font-family:var(--num);font-weight:700;font-size:24px;color:var(--primary)}
+.h-list .sc small{font-size:12px;color:var(--muted);margin-left:2px}
+.h-list .ac{flex:none;width:42px;text-align:right;font-size:12px;color:var(--muted)}
+.h-list .empty{justify-content:center;color:var(--muted);border:0;padding:28px 0;font-size:14px}
+.h-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:10px;font-size:12px;color:var(--muted)}
+.h-foot button{flex:none;border:0;background:none;color:var(--bad);font-size:12px;font-weight:600}
 #confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:40}
 </style>
 </head>
@@ -274,7 +297,8 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
       <div class="best-line" id="bestLine"></div>
     </div>
     <div class="foot">
-      <button class="ghost-btn" id="openTable">📖 看九九乘法表</button>
+      <button class="ghost-btn" id="openTable">📖 乘法表</button>
+      <button class="ghost-btn" id="openHeroes">🏆 英雄榜</button>
       <button class="ghost-btn" data-sound></button>
     </div>
   </div>
@@ -313,9 +337,15 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
 <section id="result" class="screen"><div class="wrap"><div class="card" id="resultCard"></div></div></section>
 
 <div id="countdown"><b></b></div>
-<div id="table"><div class="t-card">
+<div id="table" class="modal"><div class="t-card">
   <div class="t-head"><b id="tPick">點一格看算式</b><button class="ghost-btn" id="closeTable">關閉</button></div>
   <div class="t-grid" id="tGrid"></div>
+</div></div>
+<div id="heroes" class="modal"><div class="t-card">
+  <div class="t-head"><b>🏆 英雄榜</b><button class="ghost-btn" id="closeHeroes">關閉</button></div>
+  <div class="seg h-tabs" id="hTabs"></div>
+  <ol class="h-list" id="hList"></ol>
+  <div class="h-foot"><span>紀錄存在這台裝置的瀏覽器裡，每種秒數各排前 20 名</span><button id="hClear">清除紀錄</button></div>
 </div></div>
 <canvas id="confetti"></canvas>
 
@@ -333,7 +363,7 @@ const store = {
 /* ---------- 設定 ---------- */
 const cfg = Object.assign({
   mode: 'solo', secs: 60, custom: false, tables: [2, 3, 4, 5, 6, 7, 8, 9],
-  input: 'choice', penalty: true, cpu: 'normal', seat: null, qset: 'same', sound: true, n1: '', n2: ''
+  input: 'choice', penalty: true, cpu: 'normal', seat: null, qset: 'same', sound: true, n1: '', n2: '', hero: ''
 }, store.get('mb_cfg', {}));
 if (!cfg.seat) cfg.seat = matchMedia('(pointer:coarse)').matches && innerHeight > innerWidth ? 'face' : 'side';
 const CPU = { easy: { ms: 4200, acc: .8, name: '簡單' }, normal: { ms: 2800, acc: .9, name: '普通' }, hard: { ms: 1700, acc: .96, name: '困難' } };
@@ -639,13 +669,74 @@ function showResult(g) {
       ${missHTML(a, `${a.name}：這幾題再記一下`)}${b.cpu ? '' : missHTML(b, `${b.name}：這幾題再記一下`)}`;
     if (w && !(cfg.mode === 'cpu' && w === b)) confetti();
   }
-  renderResult(html);
+  renderResult(html + heroHTML(g), g);
 }
-function renderResult(html) {
+function renderResult(html, g) {
   $('#resultCard').innerHTML = html + actionsHTML;
   $('#rHome').onclick = goHome; $('#rAgain').onclick = startGame;
+  if ($('#rHeroes')) $('#rHeroes').onclick = () => openHeroes(cfg.secs);
+  $$('#resultCard .hero-row').forEach(row => {
+    const input = row.querySelector('input'), pl = g.players[+row.dataset.i];
+    const submit = () => {
+      const name = input.value.trim();
+      if (!name) return input.focus();
+      if (cfg.mode !== 'duo') { cfg.hero = name; store.set('mb_cfg', cfg); }
+      row.outerHTML = `<p class="hero-msg">${heroMsg(name, addHero(name, pl))}</p>`;
+    };
+    row.querySelector('button').onclick = submit;
+    input.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) submit(); };
+  });
   show('result');
 }
+
+/* ---------- 英雄榜（紀錄存在這台裝置） ---------- */
+const HERO_KEY = 'mb_heroes';
+const heroes = () => store.get(HERO_KEY, []);
+const heroSort = (x, y) => y.s - x.s || y.acc - x.acc || x.t - y.t;
+const rangeTag = t => t.length > 1 && t[t.length - 1] - t[0] === t.length - 1 ? `${t[0]}～${t[t.length - 1]}` : t.join('、');
+
+// 同一個名字在同一種秒數只留最高分；回傳名次，沒破自己紀錄時回傳原本的最高分
+function addHero(name, pl) {
+  const all = heroes(), old = all.find(h => h.n === name && h.secs === cfg.secs);
+  if (old && old.s >= pl.score) return { rank: 0, best: old.s };
+  const rec = { n: name, s: pl.score, acc: pct(pl), secs: cfg.secs, mode: cfg.mode, input: pl.input, range: rangeTag(cfg.tables), t: Date.now() };
+  const same = all.filter(h => h.secs === cfg.secs && h !== old).concat(rec).sort(heroSort).slice(0, 50);
+  store.set(HERO_KEY, all.filter(h => h.secs !== cfg.secs).concat(same));
+  return { rank: same.indexOf(rec) + 1 };
+}
+const heroMsg = (name, r) => r.rank ? `🏅 ${esc(name)} 登上 ${cfg.secs} 秒英雄榜第 ${r.rank} 名！`
+  : r.best ? `${esc(name)} 這次沒有超過自己的最高紀錄 ${r.best} 分。` : `${esc(name)} 這次沒有進入前 50 名。`;
+
+function heroHTML(g) {
+  const preset = cfg.mode === 'duo' ? [cfg.n1, cfg.n2] : [cfg.hero];
+  const rows = g.players.filter(pl => !pl.cpu && pl.score > 0).map(pl =>
+    `<div class="hero-row" data-i="${pl.i}"><input type="text" maxlength="8" value="${esc(preset[pl.i] || '')}" placeholder="${g.two && !g.players[1].cpu ? esc(pl.name) + ' 的名字' : '輸入名字'}"><button class="ghost-btn">上榜（${pl.score} 分）</button></div>`).join('');
+  return `<div class="hero-box"><h4>🏆 ${rows ? '輸入名字登上英雄榜' : '英雄榜'}<button id="rHeroes">看英雄榜 ›</button></h4>${rows}</div>`;
+}
+
+let hSecs = 0, hArm = 0;
+function openHeroes(secs) {
+  const all = heroes(), buckets = [...new Set(all.map(h => h.secs))].sort((x, y) => x - y);
+  hSecs = buckets.includes(secs) ? secs : buckets.includes(hSecs) ? hSecs : buckets[0] || 0;
+  $('#hTabs').innerHTML = buckets.map(s => `<button data-s="${s}" class="${s === hSecs ? 'on' : ''}">${s} 秒</button>`).join('');
+  const day = t => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
+  $('#hList').innerHTML = all.filter(h => h.secs === hSecs).sort(heroSort).slice(0, 20).map((h, i) =>
+    `<li><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
+      <span class="nm"><b>${esc(h.n)}</b><small>${MODE_NAME[h.mode]}・${esc(h.range)}・${h.input === 'pad' ? '數字鍵盤' : '四選一'}・${day(h.t)}</small></span>
+      <span class="sc">${h.s}<small>分</small></span><span class="ac">${h.acc}%</span></li>`).join('')
+    || '<li class="empty">還沒有紀錄。玩完一局、輸入名字就能上榜！</li>';
+  clearTimeout(hArm); $('#hClear').textContent = '清除紀錄'; $('#hClear').classList.toggle('hide', !all.length);
+  $('#heroes').classList.add('show');
+}
+$('#hTabs').onclick = e => { const b = e.target.closest('button'); if (b) openHeroes(+b.dataset.s); };
+$('#openHeroes').onclick = () => openHeroes(cfg.secs);
+$('#closeHeroes').onclick = () => $('#heroes').classList.remove('show');
+$('#heroes').onclick = e => { if (e.target.id === 'heroes') $('#heroes').classList.remove('show'); };
+$('#hClear').onclick = () => {
+  const b = $('#hClear');
+  if (b.textContent !== '清除紀錄') { store.set(HERO_KEY, []); return openHeroes(0); }
+  b.textContent = '再按一次，清除全部紀錄'; hArm = setTimeout(() => b.textContent = '清除紀錄', 3000);
+};
 
 /* ---------- 拉霸口答 ---------- */
 let S = null;
@@ -694,8 +785,9 @@ $('#sExit').onclick = goHome;
 
 /* ---------- 鍵盤 ---------- */
 document.addEventListener('keydown', e => {
-  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-  if ($('#table').classList.contains('show')) { if (e.code === 'Escape') $('#table').classList.remove('show'); return; }
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.target.tagName === 'INPUT') return;
+  const modal = $('.modal.show');
+  if (modal) { if (e.code === 'Escape') modal.classList.remove('show'); return; }
   if ($('#slot').classList.contains('active')) {
     if (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') { e.preventDefault(); slotRoll(); }
     return;

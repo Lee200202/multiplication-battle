@@ -26,17 +26,17 @@ pinned: false
 
 外觀：電腦寬螢幕會用滿整個版面（設定攤成多欄、單人模式題目在左作答在右）；主選單可切換深色／淺色，預設跟隨系統。
 
-英雄榜：單人、雙人、挑戰電腦結束後輸入名字即可上榜，依秒數分開排名，同一個名字只留最高分。紀錄存在該裝置的瀏覽器裡（不會跨裝置同步）。
+英雄榜：單人、雙人、挑戰電腦結束後輸入名字即可上榜，依秒數分開排名，同一個名字只留最高分。每台裝置的瀏覽器都會存一份；從 Hugging Face Space 開啟時另外有全站英雄榜（所有人都看得到，由 `app.py` 存成 `heroes.json`）。
 
 鍵盤操作：單人按 `1 2 3 4`；雙人對戰四選一時玩家 1 按 `Q W A S`、玩家 2 按 `I O K L`，數字鍵盤時玩家 1 用上排數字鍵、玩家 2 用右側數字鍵盤；拉霸口答按空白鍵或 Enter。
 
 ## 檔案
 
 - `index.html`：遊戲本體，單一檔案、純前端，不需要伺服器。
-- `app.py`：Gradio 包裝，把 `index.html` 嵌進 Gradio 頁面。同資料夾有 `index.html` 就用它，沒有就從這個 repo 抓最新版。
+- `app.py`：Gradio 包裝，把同資料夾的 `index.html` 嵌進 Gradio 頁面，並提供全站英雄榜的讀寫端點。Space 掛載儲存桶到 `/data` 時紀錄會永久保存，否則 Space 重啟就清空。
 
 ## 網址與部署
 
 - **GitHub Pages**：https://lee200202.github.io/multiplication-battle/ （`main` 分支根目錄的 `index.html`）
-- **Hugging Face Spaces（Gradio）**：https://huggingface.co/spaces/Hsun0500/multiplication-battle 。Space 裡只放 `app.py`，遊戲內容每 5 分鐘從這個 repo 更新一次，所以改版只要推到這裡，兩個網址都會更新。
+- **Hugging Face Spaces（Gradio）**：https://huggingface.co/spaces/Hsun0500/multiplication-battle 。Space 裡放 `app.py` 和 `index.html` 兩個檔案。
 - 本機執行 Gradio 版：`pip install gradio` 後執行 `python app.py`。

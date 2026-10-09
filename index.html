@@ -7,6 +7,7 @@
 <meta name="description" content="九九乘法表對戰遊戲：單人挑戰、雙人對戰、挑戰電腦、拉霸口答，可自選秒數與乘法範圍。">
 <meta property="og:title" content="九九乘法對戰">
 <meta property="og:description" content="單人挑戰、雙人對戰、挑戰電腦、拉霸口答，免安裝，打開就能玩。">
+<meta name="mb-api" content="">
 <meta name="theme-color" content="#4f46e5">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%234f46e5'/%3E%3Cpath d='M20 20l24 24M44 20L20 44' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
@@ -388,9 +389,10 @@ try{var t=(JSON.parse(localStorage.getItem('mb_cfg'))||{}).theme;if(t==='dark'||
 </div></div>
 <div id="heroes" class="modal"><div class="t-card">
   <div class="t-head"><b>🏆 英雄榜</b><button class="ghost-btn" id="closeHeroes">關閉</button></div>
+  <div class="seg h-tabs hide" id="hScope"><button data-scope="global">🌐 全站</button><button data-scope="local">📱 這台裝置</button></div>
   <div class="seg h-tabs" id="hTabs"></div>
   <ol class="h-list" id="hList"></ol>
-  <div class="h-foot"><span>紀錄存在這台裝置的瀏覽器裡，每種秒數各排前 20 名</span><button id="hClear">清除紀錄</button></div>
+  <div class="h-foot"><span id="hNote"></span><button id="hClear">清除紀錄</button></div>
 </div></div>
 <canvas id="confetti"></canvas>
 
@@ -739,66 +741,100 @@ function renderResult(html, g) {
   $('#rHome').onclick = goHome; $('#rAgain').onclick = startGame;
   if ($('#rHeroes')) $('#rHeroes').onclick = () => openHeroes(cfg.secs);
   $$('#resultCard .hero-row').forEach(row => {
-    const input = row.querySelector('input'), pl = g.players[+row.dataset.i];
-    const submit = () => {
+    const input = row.querySelector('input'), btn = row.querySelector('button'), pl = g.players[+row.dataset.i];
+    const submit = async () => {
       const name = input.value.trim();
       if (!name) return input.focus();
+      if (btn.disabled) return;
       if (cfg.mode !== 'duo') { cfg.hero = name; store.set('mb_cfg', cfg); }
-      row.outerHTML = `<p class="hero-msg">${heroMsg(name, addHero(name, pl))}</p>`;
+      const rec = heroRec(name, pl);
+      let msg = heroMsg(rec, addHero(rec), API ? '這台裝置的' : '');
+      if (API) {
+        btn.disabled = true; btn.textContent = '傳送中…';
+        try { msg = heroMsg(rec, await callApi('hero_add', [rec.n, rec.s, rec.acc, rec.secs, rec.mode, rec.input, rec.range]), '全站'); }
+        catch (e) { msg += '（連不上全站英雄榜，這次只記在這台裝置。）'; }
+      }
+      row.outerHTML = `<p class="hero-msg">${msg}</p>`;
     };
-    row.querySelector('button').onclick = submit;
+    btn.onclick = submit;
     input.onkeydown = e => { if (e.key === 'Enter' && !e.isComposing) submit(); };
   });
   show('result');
 }
 
-/* ---------- 英雄榜（紀錄存在這台裝置） ---------- */
+/* ---------- 英雄榜 ----------
+   每台裝置的瀏覽器都會存一份；頁面由 Gradio（app.py）提供時，另外送到伺服器的全站英雄榜。 */
 const HERO_KEY = 'mb_heroes';
+const API = (document.querySelector('meta[name="mb-api"]') || {}).content || '';
 const heroes = () => store.get(HERO_KEY, []);
 const heroSort = (x, y) => y.s - x.s || y.acc - x.acc || x.t - y.t;
 const rangeTag = t => t.length > 1 && t[t.length - 1] - t[0] === t.length - 1 ? `${t[0]}～${t[t.length - 1]}` : t.join('、');
+const heroRec = (name, pl) => ({ n: name, s: pl.score, acc: pct(pl), secs: cfg.secs, mode: cfg.mode, input: pl.input, range: rangeTag(cfg.tables), t: Date.now() });
 
-// 同一個名字在同一種秒數只留最高分；回傳名次，沒破自己紀錄時回傳原本的最高分
-function addHero(name, pl) {
-  const all = heroes(), old = all.find(h => h.n === name && h.secs === cfg.secs);
-  if (old && old.s >= pl.score) return { rank: 0, best: old.s };
-  const rec = { n: name, s: pl.score, acc: pct(pl), secs: cfg.secs, mode: cfg.mode, input: pl.input, range: rangeTag(cfg.tables), t: Date.now() };
-  const same = all.filter(h => h.secs === cfg.secs && h !== old).concat(rec).sort(heroSort).slice(0, 50);
-  store.set(HERO_KEY, all.filter(h => h.secs !== cfg.secs).concat(same));
+// 呼叫 app.py 用 gr.api 開的端點：先送出取得 event_id，再讀回結果
+async function callApi(name, data) {
+  const url = '/gradio_api/call/' + name;
+  const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ data }) });
+  const { event_id } = await r.json();
+  const m = /event: complete\ndata: (.*)/.exec(await (await fetch(url + '/' + event_id)).text());
+  if (!m) throw new Error('api ' + name);
+  return JSON.parse(m[1])[0];
+}
+
+// 同一個名字在同一種秒數只留最高分；回傳名次，沒破紀錄時回傳原本的最高分（app.py 的 hero_add 規則相同）
+function addHero(rec) {
+  const all = heroes(), old = all.find(h => h.n === rec.n && h.secs === rec.secs);
+  if (old && old.s >= rec.s) return { rank: 0, best: old.s };
+  const same = all.filter(h => h.secs === rec.secs && h !== old).concat(rec).sort(heroSort).slice(0, 50);
+  store.set(HERO_KEY, all.filter(h => h.secs !== rec.secs).concat(same));
   return { rank: same.indexOf(rec) + 1 };
 }
-const heroMsg = (name, r) => r.rank ? `🏅 ${esc(name)} 登上 ${cfg.secs} 秒英雄榜第 ${r.rank} 名！`
-  : r.best ? `${esc(name)} 這次沒有超過自己的最高紀錄 ${r.best} 分。` : `${esc(name)} 這次沒有進入前 50 名。`;
+const heroMsg = (rec, r, scope) => r.rank ? `🏅 ${esc(rec.n)} 登上 ${rec.secs} 秒${scope}英雄榜第 ${r.rank} 名！`
+  : r.best ? `「${esc(rec.n)}」在${scope}英雄榜已經有 ${r.best} 分的紀錄，這次沒有超過。` : `${esc(rec.n)} 這次沒有進入${scope}英雄榜前 50 名。`;
 
 function heroHTML(g) {
   const preset = cfg.mode === 'duo' ? [cfg.n1, cfg.n2] : [cfg.hero];
   const rows = g.players.filter(pl => !pl.cpu && pl.score > 0).map(pl =>
     `<div class="hero-row" data-i="${pl.i}"><input type="text" maxlength="8" value="${esc(preset[pl.i] || '')}" placeholder="${g.two && !g.players[1].cpu ? esc(pl.name) + ' 的名字' : '輸入名字'}"><button class="ghost-btn">上榜（${pl.score} 分）</button></div>`).join('');
-  return `<div class="hero-box"><h4>🏆 ${rows ? '輸入名字登上英雄榜' : '英雄榜'}<button id="rHeroes">看英雄榜 ›</button></h4>${rows}</div>`;
+  const note = rows && API ? '<p class="hint" style="margin:0 0 8px">名字和分數會公開在全站英雄榜，所有人都看得到，建議用暱稱。</p>' : '';
+  return `<div class="hero-box"><h4>🏆 ${rows ? '輸入名字登上英雄榜' : '英雄榜'}<button id="rHeroes">看英雄榜 ›</button></h4>${rows}${note}</div>`;
 }
 
-let hSecs = 0, hArm = 0;
-function openHeroes(secs) {
-  const all = heroes(), buckets = [...new Set(all.map(h => h.secs))].sort((x, y) => x - y);
+let hSecs = 0, hArm = 0, hScope = API ? 'global' : 'local', hData = [];
+async function openHeroes(secs, scope) {
+  if (scope) hScope = scope;
+  $('#heroes').classList.add('show');
+  $('#hScope').classList.toggle('hide', !API);
+  $$('#hScope button').forEach(b => b.classList.toggle('on', b.dataset.scope === hScope));
+  if (hScope === 'global') {
+    $('#hTabs').innerHTML = ''; $('#hList').innerHTML = '<li class="empty">讀取中…</li>'; $('#hClear').classList.add('hide');
+    try { hData = await callApi('heroes', []); } catch (e) { hData = null; }
+    if (hScope !== 'global') return; // 等待時已切到另一個榜
+  } else hData = heroes();
+  renderHeroes(secs);
+}
+function renderHeroes(secs) {
+  const all = hData || [], buckets = [...new Set(all.map(h => h.secs))].sort((x, y) => x - y);
   hSecs = buckets.includes(secs) ? secs : buckets.includes(hSecs) ? hSecs : buckets[0] || 0;
   $('#hTabs').innerHTML = buckets.map(s => `<button data-s="${s}" class="${s === hSecs ? 'on' : ''}">${s} 秒</button>`).join('');
   const day = t => { const d = new Date(t); return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`; };
   $('#hList').innerHTML = all.filter(h => h.secs === hSecs).sort(heroSort).slice(0, 20).map((h, i) =>
     `<li><span class="rk">${['🥇', '🥈', '🥉'][i] || i + 1}</span>
-      <span class="nm"><b>${esc(h.n)}</b><small>${MODE_NAME[h.mode]}・${esc(h.range)}・${h.input === 'pad' ? '數字鍵盤' : '四選一'}・${day(h.t)}</small></span>
-      <span class="sc">${h.s}<small>分</small></span><span class="ac">${h.acc}%</span></li>`).join('')
-    || '<li class="empty">還沒有紀錄。玩完一局、輸入名字就能上榜！</li>';
-  clearTimeout(hArm); $('#hClear').textContent = '清除紀錄'; $('#hClear').classList.toggle('hide', !all.length);
-  $('#heroes').classList.add('show');
+      <span class="nm"><b>${esc(h.n)}</b><small>${MODE_NAME[h.mode] || ''}・${esc(h.range)}・${h.input === 'pad' ? '數字鍵盤' : '四選一'}・${day(h.t)}</small></span>
+      <span class="sc">${+h.s}<small>分</small></span><span class="ac">${+h.acc}%</span></li>`).join('')
+    || `<li class="empty">${hData ? '還沒有紀錄。玩完一局、輸入名字就能上榜！' : '連不上全站英雄榜，請稍後再試。'}</li>`;
+  $('#hNote').textContent = (hScope === 'global' ? '全站紀錄，所有人都看得到' : '紀錄存在這台裝置的瀏覽器裡') + '；每種秒數各排前 20 名';
+  clearTimeout(hArm); $('#hClear').textContent = '清除紀錄'; $('#hClear').classList.toggle('hide', hScope === 'global' || !all.length);
 }
-$('#hTabs').onclick = e => { const b = e.target.closest('button'); if (b) openHeroes(+b.dataset.s); };
+$('#hTabs').onclick = e => { const b = e.target.closest('button'); if (b) renderHeroes(+b.dataset.s); };
+$('#hScope').onclick = e => { const b = e.target.closest('button'); if (b) openHeroes(hSecs, b.dataset.scope); };
 $('#openHeroes').onclick = () => openHeroes(cfg.secs);
 $('#closeHeroes').onclick = () => $('#heroes').classList.remove('show');
 $('#heroes').onclick = e => { if (e.target.id === 'heroes') $('#heroes').classList.remove('show'); };
 $('#hClear').onclick = () => {
   const b = $('#hClear');
   if (b.textContent !== '清除紀錄') { store.set(HERO_KEY, []); return openHeroes(0); }
-  b.textContent = '再按一次，清除全部紀錄'; hArm = setTimeout(() => b.textContent = '清除紀錄', 3000);
+  b.textContent = '再按一次，清除這台裝置的紀錄'; hArm = setTimeout(() => b.textContent = '清除紀錄', 3000);
 };
 
 /* ---------- 拉霸口答 ---------- */

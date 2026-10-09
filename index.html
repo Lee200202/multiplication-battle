@@ -255,6 +255,14 @@ kbd{position:absolute;top:6px;left:8px;font:600 11px/1 system-ui;color:var(--mut
         <div class="names"><input id="n1" type="text" maxlength="8" placeholder="玩家 1"><input id="n2" type="text" maxlength="8" placeholder="玩家 2"></div>
         <p class="hint">手機、平板放桌上面對面玩最剛好。用電腦鍵盤時：玩家 1 按 Q W A S，玩家 2 按 I O K L。</p>
       </div>
+      <div class="opt" data-show="duo">
+        <h3>兩人的題目</h3>
+        <div class="seg">
+          <button data-k="qset" data-v="same">相同題目</button>
+          <button data-k="qset" data-v="diff">不同題目</button>
+        </div>
+        <p class="hint" id="qsetHint"></p>
+      </div>
       <div class="opt" data-show="solo duo cpu">
         <h3>答錯扣 1 分（防止亂按）</h3>
         <div class="seg">
@@ -325,7 +333,7 @@ const store = {
 /* ---------- 設定 ---------- */
 const cfg = Object.assign({
   mode: 'solo', secs: 60, custom: false, tables: [2, 3, 4, 5, 6, 7, 8, 9],
-  input: 'choice', penalty: true, cpu: 'normal', seat: null, sound: true, n1: '', n2: ''
+  input: 'choice', penalty: true, cpu: 'normal', seat: null, qset: 'same', sound: true, n1: '', n2: ''
 }, store.get('mb_cfg', {}));
 if (!cfg.seat) cfg.seat = matchMedia('(pointer:coarse)').matches && innerHeight > innerWidth ? 'face' : 'side';
 const CPU = { easy: { ms: 4200, acc: .8, name: '簡單' }, normal: { ms: 2800, acc: .9, name: '普通' }, hard: { ms: 1700, acc: .96, name: '困難' } };
@@ -340,6 +348,8 @@ function syncHome() {
     b.classList.toggle('on', on);
   });
   $$('[data-show]').forEach(el => el.classList.toggle('hide', !el.dataset.show.split(' ').includes(cfg.mode)));
+  $('#qsetHint').textContent = cfg.qset === 'diff'
+    ? '兩人各出各的題目，偷看對方的答案也沒用。' : '兩人照同樣的順序出題，最公平；但落後的人看得到對方剛答過的題目。';
   $('#customRow').classList.toggle('show', cfg.custom);
   $('#customSecs').value = cfg.secs;
   $$('#tables button').forEach(b => b.classList.toggle('on', cfg.tables.includes(+b.dataset.t)));
@@ -450,6 +460,7 @@ function startGame() {
     </div>`;
     const pl = {
       i, cpu, input, name: names[i], idx: 0, score: 0, correct: 0, wrong: 0, combo: 0, max: 0, miss: [], locked: true, typed: '',
+      qs: cfg.mode === 'duo' && cfg.qset === 'diff' ? [] : G.qs,
       el: { root, a: root.querySelector('.q-a'), b: root.querySelector('.q-b'), ans: root.querySelector('.q-ans'),
         score: root.querySelector('.p-score b'), combo: root.querySelector('.p-combo'), btns: [...root.querySelectorAll('.answers button')] }
     };
@@ -499,10 +510,11 @@ function begin(g) {
   g.timer = setInterval(() => { if (G !== g || g.over) return clearInterval(g.timer); if (performance.now() >= g.t1) finish(g); }, 250);
 }
 
-const getQ = i => G.qs[i] || (G.qs[i] = makeQ(G.qs[i - 1]));
+// 題目相同時兩人共用 G.qs，題目不同時各自一串
+const getQ = pl => pl.qs[pl.idx] || (pl.qs[pl.idx] = makeQ(pl.qs[pl.idx - 1]));
 
 function showQ(pl) {
-  const g = G, q = getQ(pl.idx), el = pl.el;
+  const g = G, q = getQ(pl), el = pl.el;
   pl.typed = ''; pl.locked = true;
   el.root.classList.remove('ok', 'bad'); el.root.classList.add('rolling');
   el.ans.textContent = '?'; el.ans.classList.remove('typed');
@@ -536,14 +548,14 @@ function padKey(pl, k) {
   else if (pl.typed.length < 2) pl.typed += k;
   pl.el.ans.textContent = pl.typed || '?';
   pl.el.ans.classList.toggle('typed', !!pl.typed);
-  const q = getQ(pl.idx);
+  const q = getQ(pl);
   if (pl.typed.length >= String(q.ans).length) answer(pl, +pl.typed);
 }
 
 function answer(pl, val) {
   const g = G;
   if (!g || !g.started || g.over || pl.locked) return;
-  const q = getQ(pl.idx), el = pl.el, ok = val === q.ans;
+  const q = getQ(pl), el = pl.el, ok = val === q.ans;
   pl.locked = true;
   el.ans.textContent = q.ans; el.ans.classList.remove('typed');
   el.btns.forEach(b => {

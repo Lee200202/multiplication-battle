@@ -31,10 +31,10 @@ pinned: false
 ## 檔案
 
 - `index.html`：遊戲本體，單一檔案、純前端，不需要伺服器。
-- `app.py`：Gradio 包裝，把 `index.html` 嵌進 Gradio 頁面。
+- `app.py`：Gradio 包裝，把 `index.html` 嵌進 Gradio 頁面。同資料夾有 `index.html` 就用它，沒有就從這個 repo 抓最新版。
 
-## 部署
+## 網址與部署
 
-- **GitHub Pages**：把 `index.html` 放在 repo 根目錄並開啟 Pages 即可。
-- **Hugging Face Spaces（Gradio）**：建立一個 Gradio Space，上傳 `app.py`、`index.html`、`README.md` 三個檔案。
+- **GitHub Pages**：https://lee200202.github.io/multiplication-battle/ （`main` 分支根目錄的 `index.html`）
+- **Hugging Face Spaces（Gradio）**：https://huggingface.co/spaces/Hsun0500/multiplication-battle 。Space 裡只放 `app.py`，遊戲內容每 5 分鐘從這個 repo 更新一次，所以改版只要推到這裡，兩個網址都會更新。
 - 本機執行 Gradio 版：`pip install gradio` 後執行 `python app.py`。
